@@ -25,6 +25,22 @@ namespace leveldb {
 
 // WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
 static const size_t kHeader = 12;
+//// 对若干数目key的write操作（put/delete）封装成WriteBatch。它会将userkey
+/// 连同SequnceNumber和ValueType先做encode，然后做decode，将数据insert到指定的Handler（memtable）上面。
+/// 上层的处理逻辑简洁，但encode/decode略有冗余。
+/// WriteBatch encode之后，内部保存的数据格式：
+/*
+ * SequnceNumber | count    | record0 | ... | recordN
+ *     (uint64)  | (uint32) |         |     |
+ * record组成：
+ * ValueType | key_len    | key_data  | value_len  | value_data
+ * (char)    | (varint32) | (key_len) | (varint32) | (value_len)
+ *
+ * 1) SequnceNumber: WriteBatch中开始使用的SequnceNumber。
+ * 2) count: 批量处理的record数量
+ * 3) record：封装在WriteBatch内的数据。
+ * 如果ValueType是kTypeValue,则后面有key和value 如果ValueType是kTypeDeletion，则后面只有key。
+ */
 
 WriteBatch::WriteBatch() {
   Clear();

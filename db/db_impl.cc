@@ -33,6 +33,12 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 
+//// db中有一个compact后台进程，负责将memtable持久化成sstable，以及均衡整个db中各level的sstable。
+/// Comapct进程会优先将已经写满的memtable dump成level-0的sstable（不会合并相同key或者清理已经删除的key）。
+/// 然后，根据设计的策略选取level-n 以及level-n+1中有key-range overlap的几个sstable进行merge(期间会合并相同的key以及清理删除的key），
+/// 最后生成若干个level-(n+1)的ssatble。随着数据不断的写入和compact的进行，低level的sstable不断向高level迁移。
+/// level-0中的sstable因为是由memtable直接dump得到，所以key-range可能overlap，而level-1以及更高level中的sstable都是做merge产生，
+/// 保证了位于同level的sstable之间，key-range不会overlap，这个特性有利于读的处理。
 namespace leveldb {
 
 // Information kept for every waiting writer

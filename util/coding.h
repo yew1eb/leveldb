@@ -3,9 +3,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
 // Endian-neutral encoding:
-// * Fixed-length numbers are encoded with least-significant byte first
-// * In addition we support variable length "varint" encoding
-// * Strings are encoded prefixed by their length in varint format
+////定长编码 * Fixed-length numbers are encoded with least-significant byte first
+//// * In addition we support variable length "varint" encoding
+////变长编码 * Strings are encoded prefixed by their length in varint format
+//// 为什么都是无符号的？
 
 #ifndef STORAGE_LEVELDB_UTIL_CODING_H_
 #define STORAGE_LEVELDB_UTIL_CODING_H_

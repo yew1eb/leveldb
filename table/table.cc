@@ -12,7 +12,7 @@
 #include "util/coding.h"
 
 namespace leveldb {
-
+//// sstable :: db数据持久化的文件。文件的size有限制最大值（kTargetFileSize)。文件前面为数据，后面是索引元信息。
 struct Table::Rep {
   ~Rep() {
     delete index_block;

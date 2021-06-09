@@ -35,7 +35,7 @@
 #include "util/coding.h"
 
 namespace leveldb {
-
+///生成block的过程封装成BlockBuilder处理。
 BlockBuilder::BlockBuilder(const Options* options)
     : options_(options),
       restarts_(),

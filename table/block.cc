@@ -18,7 +18,9 @@ inline uint32_t Block::NumRestarts() const {
   assert(size_ >= 2*sizeof(uint32_t));
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
 }
-
+//// sstable的数据由一个个的block组成。当持久化数据时，多份KV聚合成block一次写入；
+/// 当读取时，也是以block单位做IO。
+/// sstable的索引信息中会保存符合key-range的block在文件中的offset/size（BlockHandle）。
 Block::Block(const char* data, size_t size, bool take_ownership)
     : data_(data),
       size_(size),

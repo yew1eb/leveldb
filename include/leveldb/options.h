@@ -26,6 +26,7 @@ enum CompressionType {
   kSnappyCompression = 0x1
 };
 
+////leveldb中启动时的一些配置，通过Option传入，get/put/delete时，也有相应的
 // Options to control the behavior of a database (passed to DB::Open)
 struct Options {
   // -------------------
@@ -53,6 +54,7 @@ struct Options {
   // corruption of one DB entry may cause a large number of entries to
   // become unreadable or for the entire DB to become unopenable.
   // Default: false
+  //// 是否保存中间的错误状态(RecoverLog/compact),compact时是否读到的block做检验。
   bool paranoid_checks;
 
   // Use the specified object to interact with the environment,
@@ -102,6 +104,7 @@ struct Options {
   // compression is enabled.  This parameter can be changed dynamically.
   //
   // Default: 4K
+  /// sstable 中block的size
   size_t block_size;
 
   // Number of keys between restart points for delta encoding of keys.
@@ -109,6 +112,7 @@ struct Options {
   // leave this parameter alone.
   //
   // Default: 16
+  //// block中对key做前缀压缩的区间长度
   int block_restart_interval;
 
   // Compress blocks using the specified compression algorithm.  This
@@ -148,6 +152,7 @@ struct ReadOptions {
   // not have been released).  If "snapshot" is NULL, use an impliicit
   // snapshot of the state at the beginning of this read operation.
   // Default: NULL
+  //// 指定读取的SnapShot
   const Snapshot* snapshot;
 
   ReadOptions()
@@ -175,6 +180,7 @@ struct WriteOptions {
   // system call followed by "fsync()".
   //
   // Default: false
+  //// write时，记binlog(WAL)之后，是否对binlog做sync
   bool sync;
 
   WriteOptions()

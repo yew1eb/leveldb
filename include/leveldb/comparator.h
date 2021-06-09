@@ -15,6 +15,7 @@ class Slice;
 // used as keys in an sstable or a database.  A Comparator implementation
 // must be thread-safe since leveldb may invoke its methods concurrently
 // from multiple threads.
+//// Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 class Comparator {
  public:
   virtual ~Comparator();

@@ -19,7 +19,8 @@
 #include "leveldb/status.h"
 
 namespace leveldb {
-
+/// leveldb中对key的查找和遍历，上层统一使用Iterator的方式处理，屏蔽底层的处理，统一逻辑。
+/// 提供RegisterCleanup()可以在Iterator销毁时，做一些清理工作（比如释放Iterator持有句柄的引用）。
 class Iterator {
  public:
   Iterator();

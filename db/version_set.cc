@@ -19,16 +19,18 @@
 #include "util/logging.h"
 
 namespace leveldb {
-
-static const int kTargetFileSize = 2 * 1048576;
+//// compact过程中，level-0中的sstable由memtable直接dump生成，不做大小限制 // 非level-0中的sstable的大小设定为kTargetFileSize
+static const int kTargetFileSize = 2 * 1048576; /// 2M
 
 // Maximum bytes of overlaps in grandparent (i.e., level+2) before we
 // stop building a single file in a level->level+1 compaction.
+//// compact level-n时，与level-n+2产生overlap的数据size （参见Compaction）
 static const int64_t kMaxGrandParentOverlapBytes = 10 * kTargetFileSize;
 
 // Maximum number of bytes in all compacted files.  We avoid expanding
 // the lower level file set of a compaction if it would make the
 // total compaction cover more than this many bytes.
+///TODO
 static const int64_t kExpandedCompactionByteSizeLimit = 25 * kTargetFileSize;
 
 static double MaxBytesForLevel(int level) {
@@ -512,9 +514,11 @@ std::string Version::DebugString() const {
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
+//// 将VersionEdit应用到VersonSet上的过程封装成VersionSet::Builder.主要是更新
 class VersionSet::Builder {
  private:
   // Helper to sort by v->files_[file_number].smallest
+  //// 处理Version::files_[i]中FileMetaData的排序
   struct BySmallestKey {
     const InternalKeyComparator* internal_comparator;
 
@@ -528,17 +532,26 @@ class VersionSet::Builder {
       }
     }
   };
-
+///// 排序的sstable（FileMetaData）集合
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
+    //// 要添加和删除的sstable文件集合
   struct LevelState {
     std::set<uint64_t> deleted_files;
     FileSet* added_files;
   };
-
+/// 要更新的VersionSet
   VersionSet* vset_;
+  /// 基准的Version，compact后，将current_传入作为base。
   Version* base_;
+  /// 各个level上要更新的文件集合（LevelStat）
+  /// compact时，并不是每个level都有更新（level-n/level-n+1）。
   LevelState levels_[config::kNumLevels];
 
+////以base_->files_[level]为基准，根据levels_中LevelStat的deleted_files/added_files做merge，
+/// 输出到新Version 的files_[level] (VersionSet::Builder::SaveTo()).
+////1） 对于每个level n， base_->files_[n]与added_files做merge，输出到新Version的files_[n]中。
+/// 过程中根据deleted_files将要删除的丢弃掉（VersionSet::Builder:: MaybeAddFile（）），。
+////2） 处理完成，新Version中的files_[level]有了最新的sstable集合（FileMetaData）。
  public:
   // Initialize a builder with the files from *base and other info from *vset
   Builder(VersionSet* vset, Version* base)
@@ -754,6 +767,11 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Initialize new descriptor log file if necessary by creating
   // a temporary file that contains a snapshot of the current version.
+  /// 为了重启db后可以恢复退出前的状态，需要将db中的状态保存下来，这些状态信息就保存在manifeest文件中。
+  /// 当db出现异常时，为了能够尽可能多的恢复，manifest中不会只保存当前的状态，而是将历史的状态都保存下来。
+  /// 又考虑到每次状态的完全保存需要的空间和耗费的时间会较多，当前采用的方式是，只在manifest开始保存完整的状态信息
+  /// （VersionSet::WriteSnapshot（）），接下来只保存每次compact产生的操作（VesrionEdit），
+  /// 重启db时，根据开头的起始状态，依次将后续的VersionEdit replay，即可恢复到退出前的状态（Vesrion）。
   std::string new_manifest_file;
   Status s;
   if (descriptor_log_ == NULL) {

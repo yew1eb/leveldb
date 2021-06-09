@@ -13,7 +13,7 @@
 namespace leveldb {
 
 struct Options;
-
+///生成block的过程封装成BlockBuilder处理
 class BlockBuilder {
  public:
   explicit BlockBuilder(const Options* options);

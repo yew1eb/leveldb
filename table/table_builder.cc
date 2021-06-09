@@ -15,7 +15,7 @@
 #include "util/logging.h"
 
 namespace leveldb {
-
+///生出sstable的过程封装成TableBuilder处理。
 struct TableBuilder::Rep {
   Options options;
   Options index_block_options;

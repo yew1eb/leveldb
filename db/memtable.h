@@ -78,8 +78,8 @@ class MemTable {
 
   KeyComparator comparator_;
   int refs_;
-  Arena arena_;
-  Table table_;
+  Arena arena_;  ///内存Allocate
+  Table table_; ///SkipList
 
   // No copying allowed
   MemTable(const MemTable&);

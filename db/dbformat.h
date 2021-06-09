@@ -18,16 +18,16 @@ namespace leveldb {
 // Grouping of constants.  We may want to make some of these
 // parameters set via options.
 namespace config {
-static const int kNumLevels = 7;
+static const int kNumLevels = 7; ////level的最大值
 
 // Level-0 compaction is started when we hit this many files.
-static const int kL0_CompactionTrigger = 4;
+static const int kL0_CompactionTrigger = 4; //// level-0中sstable的数量超过这个阈值，触发compact
 
 // Soft limit on number of level-0 files.  We slow down writes at this point.
-static const int kL0_SlowdownWritesTrigger = 8;
+static const int kL0_SlowdownWritesTrigger = 8; //// level-0中sstable的数量超过这个阈值, 慢处理此次写(sleep1ms）
 
 // Maximum number of level-0 files.  We stop writes at this point.
-static const int kL0_StopWritesTrigger = 12;
+static const int kL0_StopWritesTrigger = 12; //// level-0中sstable的数量超过这个阈值, 阻塞至compact memtable完成。
 
 // Maximum level to which a new compacted memtable is pushed if it
 // does not create overlap.  We try to push to level 2 to avoid the
@@ -35,6 +35,8 @@ static const int kL0_StopWritesTrigger = 12;
 // expensive manifest file operations.  We do not push all the way to
 // the largest level since that can generate a lot of wasted disk
 // space if the same key space is being repeatedly overwritten.
+///TODO
+//// memtable dump成的sstable，允许推向的最高level // （参见Compact流程的VersionSet::PickLevelForMemTableOutput()）
 static const int kMaxMemCompactLevel = 2;
 
 }  // namespace config
@@ -44,6 +46,7 @@ class InternalKey;
 // Value types encoded as the last component of internal keys.
 // DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk
 // data structures.
+//// 每次更新操作都是直接新插入一份kv数据，具体的数据合并和清除由后台的compact完成，这个相当于一个标识
 enum ValueType {
   kTypeDeletion = 0x0,
   kTypeValue = 0x1
@@ -55,7 +58,8 @@ enum ValueType {
 // number in internal keys, we need to use the highest-numbered
 // ValueType, not the lowest).
 static const ValueType kValueTypeForSeek = kTypeValue;
-
+//// 每次更新操作都拥有一个版本，由SequenceNumber来标识，整个db有一个全局值保存着当前使用到的SequenceNumber
+//// SequnceNumber在leveldb有重要的地位，key的排序，compact以及snapshot都依赖于它。
 typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
@@ -63,7 +67,7 @@ typedef uint64_t SequenceNumber;
 static const SequenceNumber kMaxSequenceNumber =
     ((0x1ull << 56) - 1);
 
-struct ParsedInternalKey {
+struct ParsedInternalKey { ////db内部操作的key。db内部需要将user key加入元信息(ValueType/SequenceNumber)一并做处理。
   Slice user_key;
   SequenceNumber sequence;
   ValueType type;
@@ -126,7 +130,7 @@ class InternalKeyComparator : public Comparator {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
-class InternalKey {
+class InternalKey { ////db内部，包装易用的结构，包含userkey与SequnceNumber/ValueType。
  private:
   std::string rep_;
  public:
@@ -152,7 +156,9 @@ class InternalKey {
 
   std::string DebugString() const;
 };
-
+//// db内部做key排序时使用的比较方法。排序时，会先使用user-comparator比较user-key，
+/// 如果user-key相同，则比较SequnceNumber，SequnceNumber大的为小。因为SequnceNumber在db中全局递增，
+/// 所以，对于相同的user-key，最新的更新（SequnceNumber 更大）排在前面，在查找的时候，会被先找到。
 inline int InternalKeyComparator::Compare(
     const InternalKey& a, const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
@@ -171,6 +177,8 @@ inline bool ParseInternalKey(const Slice& internal_key,
 }
 
 // A helper class useful for DBImpl::Get()
+//// db内部在为查找memtable/sstable方便，包装使用的key结构，保存有userkey与
+/// SequnceNumber/ValueType dump在内存的数据。
 class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
