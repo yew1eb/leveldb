@@ -293,7 +293,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
           dbname_, "exists (error_if_exists is true)");
     }
   }
-
+/// open2. db元数据检查
   s = versions_->Recover();
   if (s.ok()) {
     SequenceNumber max_sequence(0);
@@ -305,6 +305,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     // Note that PrevLogNumber() is no longer used, but we pay
     // attention to it in case we are recovering a database
     // produced by an older version of leveldb.
+    /// 遍历db中的文件，根据已经获得的db元信息LogNumber和PrevLogNumber,找到上一次未处理的log文件。
     const uint64_t min_log = versions_->LogNumber();
     const uint64_t prev_log = versions_->PrevLogNumber();
     std::vector<std::string> filenames;
@@ -326,6 +327,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     // Recover in the order in which the logs were generated
     std::sort(logs.begin(), logs.end());
     for (size_t i = 0; i < logs.size(); i++) {
+        /// open3. 从log中恢复上一次可能丢失的数据（RecoverLogFile）
       s = RecoverLogFile(logs[i], edit, &max_sequence);
 
       // The previous incarnation may not have written any MANIFEST
@@ -387,6 +389,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number,
       (unsigned long long) log_number);
 
   // Read all the records and add to a memtable
+  /// 遍历log文件中的record（put时WriteBatch的写入），重建memtable。达到memtable阈值（write_buffer_size），
+  /// 就dump成sstable。期间，用record中的SequnceNumber修正从MANIFEST中读取的当前SequnceNumber。
   std::string scratch;
   Slice record;
   WriteBatch batch;
@@ -415,7 +419,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number,
     if (last_seq > *max_sequence) {
       *max_sequence = last_seq;
     }
-
+///c. 将最后的memtable dump成sstable。
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       status = WriteLevel0Table(mem, edit, NULL);
       if (!status.ok()) {
@@ -1378,7 +1382,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 }
 
 DB::~DB() { }
-
+/// open1. 主要流程DB.open()
 Status DB::Open(const Options& options, const std::string& dbname,
                 DB** dbptr) {
   *dbptr = NULL;
@@ -1388,6 +1392,8 @@ Status DB::Open(const Options& options, const std::string& dbname,
   VersionEdit edit;
   Status s = impl->Recover(&edit); // Handles create_if_missing, error_if_exists
   if (s.ok()) {
+      /// open4. 生成新的log文件。更新db的元信息（VersionSet::LogAndApply()，生成最新的MANIFEST文件），
+      /// 删除无用文件（DBImpl::DeleteObsoleteFiles()）,尝试compact（DBImpl::MaybeScheduleCompaction（））。
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;
     s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),

@@ -624,6 +624,7 @@ class VersionSet::Builder {
       // same as the compaction of 40KB of data.  We are a little
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
+      /// why ?
       f->allowed_seeks = (f->file_size / 16384);
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
@@ -839,6 +840,7 @@ Status VersionSet::Recover() {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
+  /// 从CURRENT文件中读取当前的MANIFEST文件
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     return s;
@@ -873,6 +875,7 @@ Status VersionSet::Recover() {
     std::string scratch;
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       VersionEdit edit;
+      /// 从MANIFEST文件中依次读取每个record（VersionEdit::DecodeFrom）， 检查Comparator是否一
       s = edit.DecodeFrom(record);
       if (s.ok()) {
         if (edit.has_comparator_ &&
@@ -884,6 +887,7 @@ Status VersionSet::Recover() {
       }
 
       if (s.ok()) {
+          /// 依次进行replay
         builder.Apply(&edit);
       }
 
