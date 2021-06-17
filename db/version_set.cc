@@ -309,9 +309,11 @@ Status Version::Get(const ReadOptions& options,
   // We can search level-by-level since entries never hop across
   // levels.  Therefore we are guaranteed that if we find data
   // in an smaller level, later levels are irrelevant.
+  /// 从level-0开始，每个level上依次进行查找，一旦找到，即返回。
   std::vector<FileMetaData*> tmp;
   FileMetaData* tmp2;
   for (int level = 0; level < config::kNumLevels; level++) {
+      /// 首先找出level上可能包含key的sstable.(key包含在FileMetaData的[startest,largest].
     size_t num_files = files_[level].size();
     if (num_files == 0) continue;
 
@@ -330,11 +332,17 @@ Status Version::Get(const ReadOptions& options,
       }
       if (tmp.empty()) continue;
 
+      /// level-0的查找只能顺序遍历files_[0]。考虑到level-0中的sstable是memtale dump生成的，
+      /// 所以新生成的sstable一定比旧生成有更新的数据，同时sstable文件的FileNumber是递增，
+      /// 所以，将从level-0中获得的sstable(FileMetaData)按照FileNumber排序（NewestFirst（） db/version_set.cc）,
+      /// 能够优化level-0中的查找。（level-0中可能会找到多个sstable）
       std::sort(tmp.begin(), tmp.end(), NewestFirst);
       files = &tmp[0];
       num_files = tmp.size();
     } else {
       // Binary search to find earliest index whose largest key >= ikey.
+      /// 非level-0中的查找，对files_[]基于FileMetaData::largest做二分查找（FindFile（） db/version_set.cc）
+      /// 即可定位到level中可能包含key的sstable。非level-0上最多找到一个sstable。
       uint32_t index = FindFile(vset_->icmp_, files_[level], ikey);
       if (index >= num_files) {
         files = NULL;
@@ -351,7 +359,8 @@ Status Version::Get(const ReadOptions& options,
         }
       }
     }
-
+/// 如果该level上没有找到可能的sstable，跳过。
+/// 否则，对要进行查找的sstable获得其Iterator（TableCache:: NewIterator()）,做seek（）.
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != NULL && stats->seek_file == NULL) {
         // We have had more than one seek for this read.  Charge the 1st file.
@@ -367,6 +376,9 @@ Status Version::Get(const ReadOptions& options,
           options,
           f->number,
           f->file_size);
+      /// seek成功则检查有效性（GetValue() db/version_set.cc）也就是根据ValueType判断是否是有效的数据：
+      /// a) kTypeValue，返回对应的value数据。
+      /// b) kTypeDeletion，返回data not exist。
       iter->Seek(ikey);
       const bool done = GetValue(ucmp, iter, user_key, value, &s);
       if (!iter->status().ok()) {

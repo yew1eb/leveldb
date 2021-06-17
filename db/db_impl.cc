@@ -1036,13 +1036,16 @@ int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
   MutexLock l(&mutex_);
   return versions_->MaxNextLevelOverlappingBytes();
 }
-
+///get0 总体来说，get即是找到userkey相同，并且SequnceNumber最大（最新）的数据。leveldb支持对
+///特定Snapshot的get，只是简单的将Snapshot的SequnceNumber作为最大的SequnceNumber即可。
 Status DBImpl::Get(const ReadOptions& options,
                    const Slice& key,
                    std::string* value) {
   Status s;
   MutexLock l(&mutex_);
   SequenceNumber snapshot;
+  ///get1 如果ReadOption指定了snapshot，则将指定snapshot的SequnceNumber作为最大SequnceNumber,
+  ///否则，将当前最大SequnceNumber（VersionSet::last_sequnce_number）作为最大值。
   if (options.snapshot != NULL) {
     snapshot = reinterpret_cast<const SnapshotImpl*>(options.snapshot)->number_;
   } else {
@@ -1064,17 +1067,22 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Unlock();
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
+
     if (mem->Get(lkey, value, &s)) {
+        /// get2 先在memtable中查找(MemTable::Get())
       // Done
     } else if (imm != NULL && imm->Get(lkey, value, &s)) {
+        /// get3 如果memtable中未找到，并且存在immutable memtable，就在immutable memtable中查找(Memtable::Get())
       // Done
     } else {
+        /// get3 仍未找到，在sstable中查找(VersionSet::Get()
       s = current->Get(options, lkey, value, &stats);
       have_stat_update = true;
     }
     mutex_.Lock();
   }
 
+  ///统计文件被seek的次数看看是否要进行压缩
   if (have_stat_update && current->UpdateStats(stats)) {
     MaybeScheduleCompaction();
   }
