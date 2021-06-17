@@ -589,18 +589,23 @@ Status DBImpl::TEST_CompactMemTable() {
   }
   return s;
 }
-
+/// compact1 leveldb中有且仅有一个后台进程（第一次compact触发时create出来）单独做compact。
+/// 当主线程主动触发compact时（DBImpl::MaybeScheduleCompaction()）
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (bg_compaction_scheduled_) {
     // Already scheduled
   } else if (shutting_down_.Acquire_Load()) {
+      /// 1) 如果compact已经运行或者db正在退出，直接返回。
     // DB is being deleted; no more background compactions
   } else if (imm_ == NULL &&
              manual_compaction_ == NULL &&
              !versions_->NeedsCompaction()) {
+      /// 检查当前的运行状态，确定是否需要进行compact，如果需要，则触发后台调度compact（Env::Schedule()），否则直接返回。
     // No work to be done
   } else {
+      /// 3) 做实际的compact逻辑（DBImpl::BackgroundCompaction()），完成后，
+      /// 再次主动触发compact（主线程将任务入队列即返回，不会有递归栈溢出的问题）。
     bg_compaction_scheduled_ = true;
     env_->Schedule(&DBImpl::BGWork, this);
   }
