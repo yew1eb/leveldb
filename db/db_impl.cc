@@ -1129,11 +1129,13 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   }
 
   // May temporarily unlock and wait.
+  /// put2 循环检查当前db状态，确定策略
   Status status = MakeRoomForWrite(my_batch == NULL);
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && my_batch != NULL) {  // NULL batch is for compactions
     WriteBatch* updates = BuildBatchGroup(&last_writer);
+    /// put3 设置WriteBatch的SequnceNumber。
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
     last_sequence += WriteBatchInternal::Count(updates);
 
@@ -1143,17 +1145,20 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // into mem_.
     {
       mutex_.Unlock();
+      /// 先将WriteBatch中的数据记log(Log::AddRecord())。
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));
       if (status.ok() && options.sync) {
         status = logfile_->Sync();
       }
       if (status.ok()) {
+      /// 将WriteBatch 应用在memtable上。（WriteBatchInternal::InsertInto()）,
+      /// 即遍历decode出WriteBatch中的key/value/ValueType，根据ValueType对memetable进行put/delete操作。
         status = WriteBatchInternal::InsertInto(updates, mem_);
       }
       mutex_.Lock();
     }
     if (updates == tmp_batch_) tmp_batch_->Clear();
-
+    /// 更新SequnceNumber（last_sequnce + WriteBatch::count()）
     versions_->SetLastSequence(last_sequence);
   }
 
@@ -1239,6 +1244,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       break;
     } else if (
         allow_delay &&
+        /// 如果当前level-0中的文件数目达到kL0_SlowdownWritesTrigger阈值，则sleep 进行 delay。该delay只会发生一次。
         versions_->NumLevelFiles(0) >= config::kL0_SlowdownWritesTrigger) {
       // We are getting close to hitting a hard limit on the number of
       // L0 files.  Rather than delaying a single write by several
@@ -1251,18 +1257,23 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
     } else if (!force &&
+                /// 如果当前memtable的size 未达到阈值write_buffer_size，则允许这次写。
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
       break;
     } else if (imm_ != NULL) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
+      /// 如果memtable已经达到阈值，但immutable memtable仍存在，则等待compact 将其dump完成。
       bg_cv_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
+        /// 如果level-0中的文件数目达到kL0_StopWritesTrigger阈值，则等待compact memtable完成。
       // There are too many level-0 files.
       Log(options_.info_log, "waiting...\n");
       bg_cv_.Wait();
     } else {
+        /// 上述条件都不满足，则是memtable已经写满，并且immutable memtable 不存在，
+        /// 则将当前memtable置为immutable memtable，生成新的memtable和log file，主动触发compact，允许该次写。
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
@@ -1370,6 +1381,7 @@ void DBImpl::GetApproximateSizes(
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
+    ///put1 将key value封装成WriteBatch
   WriteBatch batch;
   batch.Put(key, value);
   return Write(opt, &batch);
